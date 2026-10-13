@@ -59,12 +59,33 @@ class BookCollection:
         return False
 
     def remove_book(self, title: str) -> bool:
-        """Remove a book by title."""
-        book = self.find_book_by_title(title)
-        if book:
-            self.books.remove(book)
-            self.save_books()
-            return True
+        """Remove the first exact title match, ignoring case and outer spaces.
+
+        Args:
+            title (str): The title of the book to remove.
+
+        Returns:
+            bool: ``True`` if a matching book was removed, or ``False`` if no
+                book matches. Callers can use ``False`` to tell the user that
+                no book was found. A blank title matches a blank-title book.
+
+        Raises:
+            OSError: If the updated collection cannot be saved.
+            TypeError: If a book's values cannot be serialized as JSON.
+
+        Example:
+            >>> collection = BookCollection()
+            >>> collection.add_book("Dune", "Frank Herbert", 1965)
+            Book(title='Dune', author='Frank Herbert', year=1965, read=False)
+            >>> collection.remove_book("Dune")
+            True
+        """
+        normalized_title = title.strip().casefold()
+        for book in self.books:
+            if book.title.casefold() == normalized_title:
+                self.books.remove(book)
+                self.save_books()
+                return True
         return False
 
     def find_by_author(self, author: str) -> List[Book]:
