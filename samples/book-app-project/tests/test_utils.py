@@ -23,6 +23,15 @@ def test_get_user_choice_reprompts_for_empty_and_non_numeric_input(
     assert "Please enter a number." in output
 
 
+def test_get_user_choice_reprompts_for_numbers_outside_range(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with patch("builtins.input", side_effect=["0", "6", "3"]):
+        assert utils.get_user_choice() == "3"
+
+    assert "Please choose a number from 1 to 5." in capsys.readouterr().out
+
+
 def test_get_user_choice_returns_numeric_input() -> None:
     with patch("builtins.input", return_value=" 2 "):
         assert utils.get_user_choice() == "2"
@@ -39,6 +48,19 @@ def test_get_book_details_reprompts_for_empty_title(
 
     assert details == ("The Hobbit", "J.R.R. Tolkien", 1937)
     assert "Book title cannot be empty." in capsys.readouterr().out
+
+
+def test_get_book_details_reprompts_for_invalid_year(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with patch(
+        "builtins.input",
+        side_effect=["The Hobbit", "J.R.R. Tolkien", "unknown", "1937"],
+    ):
+        details = utils.get_book_details()
+
+    assert details == ("The Hobbit", "J.R.R. Tolkien", 1937)
+    assert "Invalid year. Please enter a whole number." in capsys.readouterr().out
 
 
 def test_print_books_displays_collection(capsys: pytest.CaptureFixture[str]) -> None:

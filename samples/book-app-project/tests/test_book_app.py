@@ -107,6 +107,24 @@ def test_main_reports_data_file_error(
     assert "Could not access the book data file" in capsys.readouterr().err
 
 
+def test_main_reports_invalid_book_data(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fail_to_load() -> BookCollection:
+        raise ValueError("invalid record 1")
+
+    monkeypatch.setattr(book_app.sys, "argv", ["book_app.py", "list"])
+    monkeypatch.setattr(book_app, "BookCollection", fail_to_load)
+
+    book_app.main()
+
+    assert (
+        "Could not load the book data file: invalid record 1"
+        in capsys.readouterr().err
+    )
+
+
 def test_main_handles_end_of_input(
     collection: BookCollection,
     monkeypatch: pytest.MonkeyPatch,
@@ -119,16 +137,13 @@ def test_main_handles_end_of_input(
     assert "Operation cancelled" in capsys.readouterr().err
 
 
-def test_load_books_handles_invalid_json_structure(
+def test_load_books_rejects_invalid_json_structure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     data_file = tmp_path / "data.json"
     data_file.write_text('{"not": "a list"}')
     monkeypatch.setattr(books, "DATA_FILE", str(data_file))
 
-    collection = BookCollection()
-
-    assert collection.list_books() == []
-    assert "is invalid" in capsys.readouterr().out
+    with pytest.raises(ValueError, match="expected a list of books"):
+        BookCollection()

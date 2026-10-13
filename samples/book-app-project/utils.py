@@ -8,6 +8,8 @@ def get_user_choice() -> str:
             display.show_message("Please enter a choice.")
         elif not choice.isdigit():
             display.show_message("Please enter a number.")
+        elif choice not in {"1", "2", "3", "4", "5"}:
+            display.show_message("Please choose a number from 1 to 5.")
         else:
             return choice
 
@@ -17,7 +19,8 @@ def get_book_details() -> tuple[str, str, int]:
 
     This function takes no parameters. It repeats the title prompt until a
     non-empty title is entered. If the publication year is not a valid
-    integer, it displays a message and uses ``0``.
+    integer, it displays a message and prompts again. A year of ``0`` can
+    represent an unknown publication year.
 
     Returns:
         A tuple containing the stripped title, stripped author, and
@@ -31,11 +34,12 @@ def get_book_details() -> tuple[str, str, int]:
 
     author = input("Enter author: ").strip()
 
-    year_input = input("Enter publication year: ").strip()
-    try:
-        year = int(year_input)
-    except ValueError:
-        display.show_message("Invalid year. Defaulting to 0.")
-        year = 0
+    while True:
+        year_input = input("Enter publication year: ").strip()
+        try:
+            year = int(year_input)
+            break
+        except ValueError:
+            display.show_message("Invalid year. Please enter a whole number.")
 
     return title, author, year

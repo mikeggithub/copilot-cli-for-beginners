@@ -115,22 +115,23 @@ def test_load_books_restores_valid_records(
         "{invalid json",
         '{"title": "Dune"}',
         '[{"unexpected": "field"}]',
+        '[{"title": null, "author": "Frank Herbert", "year": 1965}]',
+        '[{"title": "Dune", "author": "Frank Herbert", "year": "1965"}]',
     ],
 )
-def test_load_books_warns_and_uses_empty_collection_for_invalid_data(
+def test_load_books_rejects_invalid_data_without_changing_source(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
     content: str,
 ) -> None:
     data_file = tmp_path / "books.json"
     data_file.write_text(content)
     monkeypatch.setattr(books, "DATA_FILE", str(data_file))
 
-    collection = BookCollection()
+    with pytest.raises(ValueError, match="Invalid book data"):
+        BookCollection()
 
-    assert collection.list_books() == []
-    assert "Warning:" in capsys.readouterr().out
+    assert data_file.read_text() == content
 
 
 def test_save_books_writes_indented_json_and_can_be_reloaded(
@@ -151,6 +152,29 @@ def test_save_books_writes_indented_json_and_can_be_reloaded(
         {"title": "Dune", "author": "Frank Herbert", "year": 1965, "read": False}
     ]
     assert reloaded_collection.list_books() == collection.list_books()
+
+
+def test_save_books_preserves_original_file_if_replace_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_file = tmp_path / "books.json"
+    data_file.write_text("[]")
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    collection = BookCollection()
+
+    def fail_replace(source: str, destination: str) -> None:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(books.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="replace failed"):
+        collection.add_book("Dune", "Frank Herbert", 1965)
+
+    assert data_file.read_text() == "[]"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "books.json",
+        "data.json",
+    ]
 
 
 def test_find_book_by_title_is_case_insensitive_and_returns_none_when_missing() -> None:

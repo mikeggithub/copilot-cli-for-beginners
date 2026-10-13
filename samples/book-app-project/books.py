@@ -1,4 +1,12 @@
+"""Manage a book collection and save it as JSON in ``data.json``.
+
+The :class:`Book` dataclass represents one book. Use :class:`BookCollection`
+to load, search, update, and save books.
+"""
+
 import json
+import os
+import tempfile
 from dataclasses import dataclass, asdict
 from typing import List, Optional
 
@@ -28,17 +36,36 @@ class Book:
 
 
 class BookCollection:
+    """Store books and persist collection changes to the JSON data file.
+
+    A missing data file starts as an empty collection. Add, mark-as-read, and
+    remove operations save their changes automatically; searches and listing
+    operations only read the in-memory collection.
+
+    Example:
+        >>> collection = BookCollection()
+        >>> collection.add_book("Dune", "Frank Herbert", 1965)
+        Book(title='Dune', author='Frank Herbert', year=1965, read=False)
+    """
+
     def __init__(self) -> None:
         """Create a collection and load its books from ``DATA_FILE``.
 
-        A missing file is treated as an empty collection. Invalid JSON or
-        invalid record structures produce a warning and also start empty.
+        If the file is missing, the collection starts empty. Invalid JSON,
+        an invalid collection schema, or invalid book field types raise
+        ``ValueError``; invalid data is not silently replaced with an empty
+        collection.
 
         Returns:
             None.
 
         Raises:
-            OSError: If the data file exists but cannot be opened or read.
+            OSError: If the data file cannot be opened or read.
+            ValueError: If the file contains malformed JSON, is not a list of
+                book objects, or contains missing/extra fields or field
+                values with invalid types. A book must have ``title`` and
+                ``author`` strings, an integer ``year`` (not a boolean), and
+                an optional boolean ``read``.
 
         Example:
             >>> collection = BookCollection()
@@ -51,52 +78,107 @@ class BookCollection:
     def load_books(self) -> None:
         """Load books from the JSON file if it exists.
 
-        A missing file results in an empty collection. Malformed JSON or
-        records that cannot be used to construct ``Book`` objects produce a
-        warning and an empty collection.
+        A missing file sets the collection to empty. Otherwise the file must
+        contain a JSON list of objects matching the ``Book`` fields:
+        ``title`` and ``author`` must be strings, ``year`` must be an integer
+        (not a boolean), and ``read``, if present, must be a boolean. Missing
+        or extra fields, invalid field types, and malformed JSON raise
+        ``ValueError`` rather than silently discarding the data. Books are
+        replaced in memory only after the complete file has been validated.
 
         Returns:
             None.
 
         Raises:
             OSError: If the file cannot be opened or read.
+            ValueError: If the JSON is malformed, the top-level value is not
+                a list, a record is not an object, or a record has invalid
+                fields or field types.
 
         Example:
             >>> collection = BookCollection()
             >>> collection.load_books()
         """
         try:
-            with open(DATA_FILE, "r") as f:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if not isinstance(data, list):
-                    raise ValueError("expected a list of books")
-                self.books = [Book(**b) for b in data]
         except FileNotFoundError:
             self.books = []
-        except (json.JSONDecodeError, TypeError, ValueError) as error:
-            print(
-                f"Warning: {DATA_FILE} is invalid ({error}). "
-                "Starting with an empty collection."
-            )
-            self.books = []
+            return
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"Invalid book data in {DATA_FILE}: {error}"
+            ) from error
+
+        try:
+            if not isinstance(data, list):
+                raise ValueError("expected a list of books")
+
+            loaded_books = []
+            for index, record in enumerate(data, start=1):
+                if not isinstance(record, dict):
+                    raise ValueError(f"record {index} must be an object")
+                try:
+                    book = Book(**record)
+                except TypeError as error:
+                    raise ValueError(f"record {index}: {error}") from error
+                if (
+                    not isinstance(book.title, str)
+                    or not isinstance(book.author, str)
+                    or type(book.year) is not int
+                    or type(book.read) is not bool
+                ):
+                    raise ValueError(f"record {index} has invalid field types")
+                loaded_books.append(book)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"Invalid book data in {DATA_FILE}: {error}") from error
+
+        self.books = loaded_books
 
     def save_books(self) -> None:
-        """Write the current books to ``DATA_FILE`` as formatted JSON.
+        """Save the current books to ``DATA_FILE`` as formatted JSON.
+
+        JSON serialization completes before any file is written. The
+        serialized data is written to a temporary file in the destination
+        directory, then replaces ``DATA_FILE`` with ``os.replace``; this
+        avoids exposing a partially written data file. Serialization errors
+        therefore leave the existing data file untouched. The replacement
+        is atomic when supported by the underlying filesystem, but this
+        method does not guarantee durability across a power loss.
 
         Returns:
             None.
 
         Raises:
-            OSError: If the file cannot be opened or written.
+            OSError: If creating or writing the temporary file, replacing
+                ``DATA_FILE``, or related filesystem operations fail.
             TypeError: If a book contains a value that cannot be serialized
-                as JSON.
+                as JSON. This occurs before the filesystem is modified.
 
         Example:
             >>> collection = BookCollection()
             >>> collection.save_books()
         """
-        with open(DATA_FILE, "w") as f:
-            json.dump([asdict(b) for b in self.books], f, indent=2)
+        serialized = json.dumps([asdict(book) for book in self.books], indent=2)
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=os.path.dirname(os.path.abspath(DATA_FILE)),
+                delete=False,
+            ) as temporary_file:
+                temporary_path = temporary_file.name
+                temporary_file.write(serialized)
+                temporary_file.write("\n")
+            os.replace(temporary_path, DATA_FILE)
+        except OSError:
+            if temporary_path is not None:
+                try:
+                    os.unlink(temporary_path)
+                except FileNotFoundError:
+                    pass
+            raise
 
     def add_book(self, title: str, author: str, year: int) -> Book:
         """Add a book and save the updated collection.

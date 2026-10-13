@@ -85,6 +85,14 @@ def main() -> None:
 
     try:
         book_collection = BookCollection()
+    except OSError as error:
+        display.show_error(f"\nCould not access the book data file: {error}\n")
+        return
+    except ValueError as error:
+        display.show_error(f"\nCould not load the book data file: {error}\n")
+        return
+
+    try:
         handler(book_collection)
     except (EOFError, KeyboardInterrupt):
         display.show_error("\nOperation cancelled.\n")
