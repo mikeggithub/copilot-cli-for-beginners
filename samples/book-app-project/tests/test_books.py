@@ -1,5 +1,7 @@
+import json
 import sys
 import os
+from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
@@ -51,3 +53,143 @@ def test_remove_book_invalid():
     collection = BookCollection()
     result = collection.remove_book("Nonexistent Book")
     assert result is False
+
+
+def test_list_by_year_includes_books_on_both_boundaries() -> None:
+    collection = BookCollection()
+    first = collection.add_book("First", "Author", 2000)
+    middle = collection.add_book("Middle", "Author", 2005)
+    last = collection.add_book("Last", "Author", 2010)
+    collection.add_book("Earlier", "Author", 1999)
+    collection.add_book("Later", "Author", 2011)
+
+    assert collection.list_by_year(2000, 2010) == [first, middle, last]
+
+
+def test_list_by_year_returns_empty_list_when_no_books_match() -> None:
+    collection = BookCollection()
+    collection.add_book("A Book", "An Author", 1999)
+
+    assert collection.list_by_year(2000, 2010) == []
+
+
+def test_list_by_year_rejects_reversed_range() -> None:
+    collection = BookCollection()
+
+    with pytest.raises(ValueError, match="Start year cannot be greater than end year"):
+        collection.list_by_year(2010, 2000)
+
+
+def test_missing_data_file_starts_with_empty_collection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(books, "DATA_FILE", str(tmp_path / "missing.json"))
+
+    collection = BookCollection()
+
+    assert collection.list_books() == []
+
+
+def test_load_books_restores_valid_records(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_file = tmp_path / "books.json"
+    data_file.write_text(
+        '[{"title": "Dune", "author": "Frank Herbert", '
+        '"year": 1965, "read": true}]'
+    )
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+
+    collection = BookCollection()
+
+    assert collection.list_books() == [
+        books.Book("Dune", "Frank Herbert", 1965, read=True)
+    ]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "{invalid json",
+        '{"title": "Dune"}',
+        '[{"unexpected": "field"}]',
+    ],
+)
+def test_load_books_warns_and_uses_empty_collection_for_invalid_data(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    content: str,
+) -> None:
+    data_file = tmp_path / "books.json"
+    data_file.write_text(content)
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+
+    collection = BookCollection()
+
+    assert collection.list_books() == []
+    assert "Warning:" in capsys.readouterr().out
+
+
+def test_save_books_writes_indented_json_and_can_be_reloaded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_file = tmp_path / "books.json"
+    data_file.write_text("[]")
+    monkeypatch.setattr(books, "DATA_FILE", str(data_file))
+    collection = BookCollection()
+    collection.add_book("Dune", "Frank Herbert", 1965)
+
+    saved_text = data_file.read_text()
+    reloaded_collection = BookCollection()
+
+    assert "  \"title\": \"Dune\"" in saved_text
+    assert json.loads(saved_text) == [
+        {"title": "Dune", "author": "Frank Herbert", "year": 1965, "read": False}
+    ]
+    assert reloaded_collection.list_books() == collection.list_books()
+
+
+def test_find_book_by_title_is_case_insensitive_and_returns_none_when_missing() -> None:
+    collection = BookCollection()
+    book = collection.add_book("The Hobbit", "J.R.R. Tolkien", 1937)
+
+    assert collection.find_book_by_title("tHe HoBbIt") is book
+    assert collection.find_book_by_title("Dune") is None
+
+
+def test_find_by_author_matches_full_name_ignoring_case() -> None:
+    collection = BookCollection()
+    first = collection.add_book("Dune", "Frank Herbert", 1965)
+    second = collection.add_book("Children of Dune", "Frank Herbert", 1976)
+    collection.add_book("The Hobbit", "J.R.R. Tolkien", 1937)
+
+    assert collection.find_by_author("FRANK HERBERT") == [first, second]
+    assert collection.find_by_author("Frank") == []
+
+
+def test_search_books_finds_partial_matches_in_title_and_author() -> None:
+    collection = BookCollection()
+    title_match = collection.add_book("The Hobbit", "J.R.R. Tolkien", 1937)
+    author_match = collection.add_book("The Silmarillion", "J.R.R. Tolkien", 1977)
+
+    assert collection.search_books("HOB") == [title_match]
+    assert collection.search_books("tolkien") == [title_match, author_match]
+
+
+def test_search_books_casefolds_query_and_rejects_blank_query() -> None:
+    collection = BookCollection()
+    book = collection.add_book("The Straße", "A. Writer", 2020)
+
+    assert collection.search_books("STRASSE") == [book]
+    with pytest.raises(ValueError, match="Search query cannot be empty"):
+        collection.search_books("  ")
+
+
+def test_list_books_returns_the_collection_list() -> None:
+    collection = BookCollection()
+
+    assert collection.list_books() is collection.books

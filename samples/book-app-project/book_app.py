@@ -1,97 +1,95 @@
 import sys
+from collections.abc import Callable
+
 from books import BookCollection
+import display
 
 
-# Global collection instance
-collection = BookCollection()
+def handle_list(book_collection: BookCollection) -> None:
+    books = book_collection.list_books()
+    display.print_books(books)
 
 
-def show_books(books):
-    """Display books in a user-friendly format."""
-    if not books:
-        print("No books found.")
-        return
-
-    print("\nYour Book Collection:\n")
-
-    for index, book in enumerate(books, start=1):
-        status = "✓" if book.read else " "
-        print(f"{index}. [{status}] {book.title} by {book.author} ({book.year})")
-
-    print()
-
-
-def handle_list():
-    books = collection.list_books()
-    show_books(books)
-
-
-def handle_add():
-    print("\nAdd a New Book\n")
+def handle_add(book_collection: BookCollection) -> None:
+    display.show_message("\nAdd a New Book\n")
 
     title = input("Title: ").strip()
     author = input("Author: ").strip()
     year_str = input("Year: ").strip()
 
+    if not title or not author:
+        display.show_message("\nError: title and author cannot be empty.\n")
+        return
+
     try:
         year = int(year_str) if year_str else 0
-        collection.add_book(title, author, year)
-        print("\nBook added successfully.\n")
-    except ValueError as e:
-        print(f"\nError: {e}\n")
+    except ValueError:
+        display.show_message(
+            "\nError: enter a whole number for the year, or leave it blank.\n"
+        )
+        return
+
+    book_collection.add_book(title, author, year)
+    display.show_message("\nBook added successfully.\n")
 
 
-def handle_remove():
-    print("\nRemove a Book\n")
+def handle_remove(book_collection: BookCollection) -> None:
+    display.show_message("\nRemove a Book\n")
 
     title = input("Enter the title of the book to remove: ").strip()
-    collection.remove_book(title)
+    if not title:
+        display.show_message("\nError: title cannot be empty.\n")
+        return
 
-    print("\nBook removed if it existed.\n")
-
-
-def handle_find():
-    print("\nFind Books by Author\n")
-
-    author = input("Author name: ").strip()
-    books = collection.find_by_author(author)
-
-    show_books(books)
+    if book_collection.remove_book(title):
+        display.show_message("\nBook removed successfully.\n")
+    else:
+        display.show_message("\nNo book with that title was found.\n")
 
 
-def show_help():
-    print("""
-Book Collection Helper
+def handle_find(book_collection: BookCollection) -> None:
+    display.show_message("\nFind Books by Title or Author\n")
 
-Commands:
-  list     - Show all books
-  add      - Add a new book
-  remove   - Remove a book by title
-  find     - Find books by author
-  help     - Show this help message
-""")
+    query = input("Search by title or author: ").strip()
+    if not query:
+        display.show_message("\nError: search term cannot be empty.\n")
+        return
+
+    books = book_collection.search_books(query)
+
+    display.print_books(books)
 
 
-def main():
+def main() -> None:
     if len(sys.argv) < 2:
-        show_help()
+        display.show_help()
         return
 
     command = sys.argv[1].lower()
 
-    if command == "list":
-        handle_list()
-    elif command == "add":
-        handle_add()
-    elif command == "remove":
-        handle_remove()
-    elif command == "find":
-        handle_find()
-    elif command == "help":
-        show_help()
-    else:
-        print("Unknown command.\n")
-        show_help()
+    if command == "help":
+        display.show_help()
+        return
+
+    handlers: dict[str, Callable[[BookCollection], None]] = {
+        "list": handle_list,
+        "add": handle_add,
+        "remove": handle_remove,
+        "find": handle_find,
+    }
+    handler = handlers.get(command)
+    if handler is None:
+        display.show_message("Unknown command.\n")
+        display.show_help()
+        return
+
+    try:
+        book_collection = BookCollection()
+        handler(book_collection)
+    except (EOFError, KeyboardInterrupt):
+        display.show_error("\nOperation cancelled.\n")
+    except OSError as error:
+        display.show_error(f"\nCould not access the book data file: {error}\n")
 
 
 if __name__ == "__main__":

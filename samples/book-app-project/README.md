@@ -10,6 +10,7 @@ It can add, remove, and list books. Also mark them as read.
 ## Current Features
 
 * Reads books from a JSON file (our database)
+* Finds books by title or author using partial, case-insensitive matches
 * Input checking is weak in some areas
 * Some tests exist but probably not enough
 
