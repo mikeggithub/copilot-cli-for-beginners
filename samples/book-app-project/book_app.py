@@ -10,6 +10,11 @@ def handle_list(book_collection: BookCollection) -> None:
     display.print_books(books)
 
 
+def handle_list_unread(book_collection: BookCollection) -> None:
+    books = book_collection.get_unread_books()
+    display.print_books(books)
+
+
 def handle_add(book_collection: BookCollection) -> None:
     display.show_message("\nAdd a New Book\n")
 
@@ -66,6 +71,8 @@ def main() -> None:
         return
 
     command = sys.argv[1].lower()
+    if command == "list" and len(sys.argv) > 2 and sys.argv[2].lower() == "unread":
+        command = "list unread"
 
     if command == "help":
         display.show_help()
@@ -73,6 +80,7 @@ def main() -> None:
 
     handlers: dict[str, Callable[[BookCollection], None]] = {
         "list": handle_list,
+        "list unread": handle_list_unread,
         "add": handle_add,
         "remove": handle_remove,
         "find": handle_find,

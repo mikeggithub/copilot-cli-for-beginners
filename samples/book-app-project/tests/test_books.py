@@ -217,3 +217,48 @@ def test_list_books_returns_the_collection_list() -> None:
     collection = BookCollection()
 
     assert collection.list_books() is collection.books
+
+
+def test_get_unread_books_returns_only_unread_books() -> None:
+    collection = BookCollection()
+    first_unread_book = collection.add_book("Dune", "Frank Herbert", 1965)
+    read_book = collection.add_book("1984", "George Orwell", 1949)
+    second_unread_book = collection.add_book("The Hobbit", "J.R.R. Tolkien", 1937)
+    collection.mark_as_read("1984")
+
+    assert collection.get_unread_books() == [first_unread_book, second_unread_book]
+    assert read_book not in collection.get_unread_books()
+
+
+def test_get_unread_books_returns_empty_list_when_collection_is_empty() -> None:
+    collection = BookCollection()
+
+    assert collection.get_unread_books() == []
+
+
+def test_get_unread_books_returns_empty_list_when_all_books_are_read() -> None:
+    collection = BookCollection()
+    collection.add_book("1984", "George Orwell", 1949)
+    collection.mark_as_read("1984")
+
+    assert collection.get_unread_books() == []
+
+
+def test_get_unread_books_returns_all_books_when_none_have_been_read() -> None:
+    collection = BookCollection()
+    first_book = collection.add_book("Dune", "Frank Herbert", 1965)
+    second_book = collection.add_book("The Hobbit", "J.R.R. Tolkien", 1937)
+
+    assert collection.get_unread_books() == [first_book, second_book]
+
+
+def test_get_unread_books_does_not_change_the_collection() -> None:
+    collection = BookCollection()
+    book = collection.add_book("Dune", "Frank Herbert", 1965)
+    original_books = collection.list_books().copy()
+
+    unread_books = collection.get_unread_books()
+    unread_books.clear()
+
+    assert collection.list_books() == original_books
+    assert collection.list_books() == [book]

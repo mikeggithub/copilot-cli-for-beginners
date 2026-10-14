@@ -41,6 +41,7 @@ Book Collection Helper
 
 Commands:
   list     - Show all books
+  list unread - Show books that have not been read
   add      - Add a new book
   remove   - Remove a book by title
   find     - Find books by title or author

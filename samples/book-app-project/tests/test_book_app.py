@@ -92,6 +92,73 @@ def test_handle_find_rejects_empty_search_term(
     assert "search term cannot be empty" in capsys.readouterr().out
 
 
+def test_main_list_unread_shows_only_unread_books(
+    collection: BookCollection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    collection.add_book("The Hobbit", "J.R.R. Tolkien", 1937)
+    collection.add_book("1984", "George Orwell", 1949)
+    collection.mark_as_read("1984")
+    monkeypatch.setattr(book_app.sys, "argv", ["book_app.py", "list", "unread"])
+
+    book_app.main()
+    output = capsys.readouterr().out
+
+    assert "The Hobbit by J.R.R. Tolkien" in output
+    assert "1984 by George Orwell" not in output
+
+
+def test_main_list_unread_reports_when_no_unread_books_exist(
+    collection: BookCollection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    collection.add_book("1984", "George Orwell", 1949)
+    collection.mark_as_read("1984")
+    monkeypatch.setattr(book_app.sys, "argv", ["book_app.py", "list", "unread"])
+
+    book_app.main()
+
+    assert "No books found." in capsys.readouterr().out
+
+
+def test_main_list_unread_command_is_case_insensitive(
+    collection: BookCollection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    collection.add_book("The Hobbit", "J.R.R. Tolkien", 1937)
+    monkeypatch.setattr(book_app.sys, "argv", ["book_app.py", "LIST", "UNREAD"])
+
+    book_app.main()
+
+    assert "The Hobbit by J.R.R. Tolkien" in capsys.readouterr().out
+
+
+def test_main_list_still_shows_read_and_unread_books(
+    collection: BookCollection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    collection.add_book("The Hobbit", "J.R.R. Tolkien", 1937)
+    collection.add_book("1984", "George Orwell", 1949)
+    collection.mark_as_read("1984")
+    monkeypatch.setattr(book_app.sys, "argv", ["book_app.py", "list"])
+
+    book_app.main()
+    output = capsys.readouterr().out
+
+    assert "The Hobbit by J.R.R. Tolkien" in output
+    assert "1984 by George Orwell" in output
+
+
+def test_help_lists_list_unread_command(capsys: pytest.CaptureFixture[str]) -> None:
+    book_app.display.show_help()
+
+    assert "list unread" in capsys.readouterr().out
+
+
 def test_main_reports_data_file_error(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
